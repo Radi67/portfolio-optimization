@@ -32,9 +32,8 @@ def define_variables(stockcodes):
     """
 
     # TODO: Define your list of variables and call it stocks
-    ## Hint: Remember to import the required package at the top of the file for Binary variables
-    
-
+     ## Hint: Remember to import the required package at the top of the file for Binary variables
+        stocks = [Binary(f"s_{stk}") for stk in stockcodes]
     return stocks
 
 def define_cqm(stocks, num_stocks_to_buy, price, returns, budget):
@@ -64,7 +63,40 @@ def define_cqm(stocks, num_stocks_to_buy, price, returns, budget):
 
     # TODO: Initialize the ConstrainedQuadraticModel called cqm
     ## Hint: Remember to import the required package at the top of the file for ConstrainedQuadraticModels
-    
+        # 1. Initialize CQM
+    cqm = ConstrainedQuadraticModel()
+
+    # 2. Constraint: choose exactly num_stocks_to_buy stocks
+    cqm.add_constraint(
+        sum(stocks) == num_stocks_to_buy,
+        label='choose k stocks'
+    )
+
+    # 3. Constraint: budget
+    cqm.add_constraint(
+        sum(price[i] * stocks[i] for i in range(len(stocks))) <= budget,
+        label='budget_limitation'
+    )
+
+    # --- Inject frustration to create many local minima ---
+    # Penalize selecting some pairs together (positive weights)
+    frustration = 0
+    frustration += 2*stocks[0]*stocks[1]
+    frustration += 3*stocks[2]*stocks[3]
+    frustration += 2*stocks[4]*stocks[5]
+
+    # Encourage incompatible behavior in others (negative weights)
+    frustration += -4*stocks[1]*stocks[4]
+    frustration += -3*stocks[3]*stocks[7]
+
+    # Add a frustration loop (like a spin-glass cycle)
+    n = len(stocks)
+    for i in range(n):
+        frustration += 2 * stocks[i] * stocks[(i+1) % n]
+        frustration += -3 * stocks[i] * stocks[(i+2) % n]
+
+    # 4. Objective: maximize returns   (we MINIMIZE NEGATIVE returns)
+    base_obj = -sum(returns[i] * stocks[i] for i in range(len(stocks)))
 
     # TODO: Add a constraint to choose exactly num_stocks_to_buy stocks
     ## Important: Use the label 'choose k stocks', this label is case sensitive
@@ -76,7 +108,8 @@ def define_cqm(stocks, num_stocks_to_buy, price, returns, budget):
 
     # TODO: Add a constraint that the cost of the purchased stocks is less than or equal to the budget
     ## Important: Use the label 'budget_limitation', this label is case sensitive and uses an underscore
-    
+
+    cqm.set_objective(base_obj + frustration)
 
     return cqm
 
